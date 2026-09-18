@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 // Asegúrate de importar tus archivos correctamente
 import '../providers/predicas_provider.dart'; 
+import '../providers/theme_provider.dart';
+import 'video_player_screen.dart';
 //import '../models/predica.dart';
 
 class PantallaPrincipal extends StatelessWidget {
@@ -13,20 +14,20 @@ class PantallaPrincipal extends StatelessWidget {
   Widget build(BuildContext context) {
     // Obtenemos el provider para leer los datos
     final provider = Provider.of<PredicasProvider>(context);
+    final colorPrimario = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Prédicas'),
         actions: [
-          // Botón para alternar entre todas o solo favoritas
           IconButton(
             icon: Icon(
-              provider.mostrarSoloFavoritos ? Icons.favorite : Icons.favorite_border,
-              color: provider.mostrarSoloFavoritos ? Colors.red : Colors.white,
+              context.watch<ThemeProvider>().modoOscuro
+                  ? Icons.light_mode
+                  : Icons.dark_mode,
             ),
-            onPressed: () {
-              provider.alternarVistaFavoritos(!provider.mostrarSoloFavoritos);
-            },
+            tooltip: 'Cambiar tema',
+            onPressed: () => context.read<ThemeProvider>().alternarTema(),
           ),
         ],
       ),
@@ -47,49 +48,28 @@ class PantallaPrincipal extends StatelessWidget {
             ),
           ),
 
-          // SELECTOR DE CATEGORÍAS (chips horizontales)
-          if (provider.categorias.isNotEmpty)
-            SizedBox(
-              height: 44,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                children: [
-                  // Chip "Todas"
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: const Text('Todas'),
-                      selected: provider.categoriaSeleccionada == null,
-                      selectedColor: Colors.red,
-                      labelStyle: TextStyle(
-                        color: provider.categoriaSeleccionada == null
-                            ? Colors.white
-                            : Colors.black87,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      onSelected: (_) => provider.seleccionarCategoria(null),
-                    ),
+          // Chip indicando el filtro activo (si no es "Todas")
+          if (provider.filtroActivo != PredicasProvider.filtroTodas)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Chip(
+                  avatar: Icon(
+                    provider.mostrarSoloFavoritos ? Icons.favorite : Icons.label,
+                    color: Colors.white,
+                    size: 18,
                   ),
-                  // Un chip por cada categoría encontrada en el JSON
-                  ...provider.categorias.map(
-                    (categoria) => Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(categoria),
-                        selected: provider.categoriaSeleccionada == categoria,
-                        selectedColor: Colors.red,
-                        labelStyle: TextStyle(
-                          color: provider.categoriaSeleccionada == categoria
-                              ? Colors.white
-                              : Colors.black87,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        onSelected: (_) => provider.seleccionarCategoria(categoria),
-                      ),
-                    ),
+                  label: Text(
+                    provider.mostrarSoloFavoritos
+                        ? 'Favoritos'
+                        : provider.categoriaSeleccionada ?? '',
                   ),
-                ],
+                  backgroundColor: colorPrimario,
+                  labelStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                  deleteIcon: const Icon(Icons.close, color: Colors.white, size: 18),
+                  onDeleted: () => provider.seleccionarFiltro(PredicasProvider.filtroTodas),
+                ),
               ),
             ),
 
@@ -118,7 +98,7 @@ class PantallaPrincipal extends StatelessWidget {
                           return Card(
                             margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             child: ListTile(
-                              leading: const Icon(Icons.play_circle_fill, color: Colors.red, size: 40),
+                              leading: Icon(Icons.play_circle_fill, color: colorPrimario, size: 40),
                               title: Text(
                                 predica.titulo,
                                 maxLines: 2,
@@ -133,8 +113,16 @@ class PantallaPrincipal extends StatelessWidget {
                                 ),
                                 onPressed: () => provider.toggleFavorito(predica.id),
                               ),
-                              // ACCIÓN: Redireccionar a YouTube al hacer clic
-                              onTap: () => _abrirVideoEnYouTube(predica.url),
+                              // ACCIÓN: Abrir el reproductor in-app
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => VideoPlayerScreen(
+                                    titulo: predica.titulo,
+                                    url: predica.url,
+                                  ),
+                                ),
+                              ),
                             ),
                           );
                         },
@@ -142,31 +130,121 @@ class PantallaPrincipal extends StatelessWidget {
           ),
         ],
       ),
-      // Botón flotante para actualizar la lista desde internet
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          bool exito = await provider.recargarLista();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(exito ? 'Lista actualizada' : 'Error al actualizar')),
-          );
-        },
-        child: const Icon(Icons.refresh),
+      // Dos botones flotantes: filtrar por categoría y actualizar lista
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FloatingActionButton(
+            heroTag: 'fab_categorias',
+            onPressed: () => _mostrarFiltros(context, provider),
+            backgroundColor: Theme.of(context).colorScheme.surface,
+            foregroundColor: colorPrimario,
+            child: const Icon(Icons.category),
+          ),
+          const SizedBox(height: 12),
+          FloatingActionButton(
+            heroTag: 'fab_refresh',
+            onPressed: () async {
+              bool exito = await provider.recargarLista();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(exito ? 'Lista actualizada' : 'Error al actualizar')),
+              );
+            },
+            child: const Icon(Icons.refresh),
+          ),
+        ],
       ),
     );
   }
 
-  // --- LÓGICA DE RESPALDO (FALLBACK) PARA ABRIR YOUTUBE ---
-  Future<void> _abrirVideoEnYouTube(String urlVideo) async {
-    final Uri url = Uri.parse(urlVideo);
-    try {
-      if (await canLaunchUrl(url)) {
-        // Forzamos que se abra en la app externa de YouTube (o navegador)
-        await launchUrl(url, mode: LaunchMode.externalApplication);
-      } else {
-        debugPrint('No se pudo abrir el enlace: $urlVideo');
-      }
-    } catch (e) {
-      debugPrint('Error lanzando URL: $e');
-    }
+  // --- BOTTOM SHEET DE FILTROS (Todas / Favoritos / Categorías) ---
+  void _mostrarFiltros(BuildContext context, PredicasProvider provider) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        // Usamos Consumer para que el sheet se actualice al elegir una opción
+        return Consumer<PredicasProvider>(
+          builder: (context, prov, _) {
+            return SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Text(
+                      'Filtrar por',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  Flexible(
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: [
+                        _opcionFiltro(
+                          context: context,
+                          provider: prov,
+                          valor: PredicasProvider.filtroTodas,
+                          icono: Icons.list,
+                          texto: 'Todas',
+                        ),
+                        _opcionFiltro(
+                          context: context,
+                          provider: prov,
+                          valor: PredicasProvider.filtroFavoritos,
+                          icono: Icons.favorite,
+                          texto: 'Favoritos',
+                        ),
+                        if (prov.categorias.isNotEmpty) const Divider(),
+                        ...prov.categorias.map(
+                          (categoria) => _opcionFiltro(
+                            context: context,
+                            provider: prov,
+                            valor: categoria,
+                            icono: Icons.label_outline,
+                            texto: categoria,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
+
+  Widget _opcionFiltro({
+    required BuildContext context,
+    required PredicasProvider provider,
+    required String valor,
+    required IconData icono,
+    required String texto,
+  }) {
+    final bool seleccionado = provider.filtroActivo == valor;
+    final colorPrimario = Theme.of(context).colorScheme.primary;
+    final colorTexto = Theme.of(context).textTheme.bodyLarge?.color;
+    return ListTile(
+      leading: Icon(icono, color: seleccionado ? colorPrimario : Colors.grey[500]),
+      title: Text(
+        texto,
+        style: TextStyle(
+          fontWeight: seleccionado ? FontWeight.bold : FontWeight.normal,
+          color: seleccionado ? colorPrimario : colorTexto,
+        ),
+      ),
+      trailing: seleccionado ? Icon(Icons.check, color: colorPrimario) : null,
+      onTap: () {
+        provider.seleccionarFiltro(valor);
+        Navigator.pop(context);
+      },
+    );
+  }
+
 }

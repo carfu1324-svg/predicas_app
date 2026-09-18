@@ -190,6 +190,35 @@ class PredicasProvider extends ChangeNotifier {
     _aplicarFiltros();
   }
 
+  // ==========================================================
+  //  SELECTOR UNIFICADO: Todas / Favoritos / Categoría
+  //  Se usan como mutuamente excluyentes en el bottom sheet.
+  // ==========================================================
+  static const String filtroTodas = '__todas__';
+  static const String filtroFavoritos = '__favoritos__';
+
+  /// Devuelve el identificador del filtro activo actualmente,
+  /// para resaltar la opción correcta en el bottom sheet.
+  String get filtroActivo {
+    if (_mostrarSoloFavoritos) return filtroFavoritos;
+    if (_categoriaSeleccionada != null) return _categoriaSeleccionada!;
+    return filtroTodas;
+  }
+
+  void seleccionarFiltro(String filtro) {
+    if (filtro == filtroTodas) {
+      _categoriaSeleccionada = null;
+      _mostrarSoloFavoritos = false;
+    } else if (filtro == filtroFavoritos) {
+      _categoriaSeleccionada = null;
+      _mostrarSoloFavoritos = true;
+    } else {
+      _categoriaSeleccionada = filtro;
+      _mostrarSoloFavoritos = false;
+    }
+    _aplicarFiltros();
+  }
+
   // --- BUSCADOR ---
   void buscar(String query) {
     _queryBusqueda = query;
