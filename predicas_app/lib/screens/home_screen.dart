@@ -34,7 +34,7 @@ class PantallaPrincipal extends StatelessWidget {
         children: [
           // BUSCADOR BÁSICO
           Padding(
-            padding: const EdgeInsets.all(12.0),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
             child: TextField(
               onChanged: (value) => provider.buscar(value),
               decoration: InputDecoration(
@@ -46,40 +46,99 @@ class PantallaPrincipal extends StatelessWidget {
               ),
             ),
           ),
-          
+
+          // SELECTOR DE CATEGORÍAS (chips horizontales)
+          if (provider.categorias.isNotEmpty)
+            SizedBox(
+              height: 44,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                children: [
+                  // Chip "Todas"
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: const Text('Todas'),
+                      selected: provider.categoriaSeleccionada == null,
+                      selectedColor: Colors.red,
+                      labelStyle: TextStyle(
+                        color: provider.categoriaSeleccionada == null
+                            ? Colors.white
+                            : Colors.black87,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      onSelected: (_) => provider.seleccionarCategoria(null),
+                    ),
+                  ),
+                  // Un chip por cada categoría encontrada en el JSON
+                  ...provider.categorias.map(
+                    (categoria) => Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text(categoria),
+                        selected: provider.categoriaSeleccionada == categoria,
+                        selectedColor: Colors.red,
+                        labelStyle: TextStyle(
+                          color: provider.categoriaSeleccionada == categoria
+                              ? Colors.white
+                              : Colors.black87,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        onSelected: (_) => provider.seleccionarCategoria(categoria),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          const SizedBox(height: 6),
+
           // LISTA DE PRÉDICAS
           Expanded(
             child: provider.cargando
                 ? const Center(child: CircularProgressIndicator())
-                : ListView.builder( // Usamos ListView.builder para renderizar la lista eficientemente
-                    itemCount: provider.predicas.length,
-                    itemBuilder: (context, index) {
-                      final predica = provider.predicas[index];
-                      
-                      return Card(
-                        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        child: ListTile(
-                          leading: const Icon(Icons.play_circle_fill, color: Colors.red, size: 40),
-                          title: Text(
-                            predica.titulo,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
+                : provider.predicas.isEmpty
+                    ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(24.0),
+                          child: Text(
+                            'No hay prédicas para este filtro.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.grey),
                           ),
-                          subtitle: Text(predica.fecha), // Mostramos la fecha
-                          trailing: IconButton(
-                            icon: Icon(
-                              provider.esFavorito(predica.id) ? Icons.favorite : Icons.favorite_border,
-                              color: provider.esFavorito(predica.id) ? Colors.red : Colors.grey,
-                            ),
-                            onPressed: () => provider.toggleFavorito(predica.id),
-                          ),
-                          // ACCIÓN: Redireccionar a YouTube al hacer clic
-                          onTap: () => _abrirVideoEnYouTube(predica.url),
                         ),
-                      );
-                    },
-                  ),
+                      )
+                    : ListView.builder(
+                        itemCount: provider.predicas.length,
+                        itemBuilder: (context, index) {
+                          final predica = provider.predicas[index];
+
+                          return Card(
+                            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            child: ListTile(
+                              leading: const Icon(Icons.play_circle_fill, color: Colors.red, size: 40),
+                              title: Text(
+                                predica.titulo,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              subtitle: Text('${predica.fecha} · ${predica.categoria}'),
+                              trailing: IconButton(
+                                icon: Icon(
+                                  provider.esFavorito(predica.id) ? Icons.favorite : Icons.favorite_border,
+                                  color: provider.esFavorito(predica.id) ? Colors.red : Colors.grey,
+                                ),
+                                onPressed: () => provider.toggleFavorito(predica.id),
+                              ),
+                              // ACCIÓN: Redireccionar a YouTube al hacer clic
+                              onTap: () => _abrirVideoEnYouTube(predica.url),
+                            ),
+                          );
+                        },
+                      ),
           ),
         ],
       ),

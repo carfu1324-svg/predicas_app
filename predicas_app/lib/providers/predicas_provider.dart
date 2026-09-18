@@ -14,11 +14,17 @@ class PredicasProvider extends ChangeNotifier {
   List<Predica> _predicasFiltradas = [];
   List<String> _idsFavoritos = [];
   
-  bool _mostrarSoloFavoritos = false; // Reemplaza la antigua lógica de categorías
+  bool _mostrarSoloFavoritos = false;
   bool _cargando = true;
 
+  // --- CATEGORÍAS ---
+  List<String> _categoriasDisponibles = [];
+  String? _categoriaSeleccionada; // null = "Todas"
+
+  // --- BÚSQUEDA ---
+  String _queryBusqueda = '';
+
   // --- CONFIGURACIÓN DE ACTUALIZACIÓN ---
-  // IMPORTANTE: Aquí pondrás el enlace "Raw" de tu archivo JSON cuando lo subas a GitHub
   static const String _urlGitHub = "https://gist.githubusercontent.com/carfu1324-svg/5a9ff6c40fec0c78ef673714152f4abf/raw/predicas.json";
   static const String _nombreArchivoLocal = "predicas_local_v1.json";
 
@@ -26,6 +32,8 @@ class PredicasProvider extends ChangeNotifier {
   List<Predica> get predicas => _predicasFiltradas;
   bool get cargando => _cargando;
   bool get mostrarSoloFavoritos => _mostrarSoloFavoritos;
+  List<String> get categorias => _categoriasDisponibles;
+  String? get categoriaSeleccionada => _categoriaSeleccionada;
 
   PredicasProvider() {
     log("Inicializando Provider de Prédicas...", name: 'PredicasProvider');
@@ -59,20 +67,16 @@ class PredicasProvider extends ChangeNotifier {
 
       String jsonString;
 
-      // PASO A: ¿Existe una versión descargada en el celular?
       if (await archivoLocal.exists()) {
         log("Cargando prédicas desde almacenamiento local", name: 'PredicasProvider');
         jsonString = await archivoLocal.readAsString();
       } else {
-        // PASO B: No existe, usamos la de fábrica
         log("Cargando prédicas desde Assets", name: 'PredicasProvider');
         jsonString = await rootBundle.loadString('assets/predicas_final.json');
       }
 
-      // Procesamos los datos
       _procesarJson(jsonString);
 
-      // PASO C: (Silencioso) Buscar actualizaciones en internet
       _buscarActualizacionesEnNube(aplicarCambiosVisuales: false);
 
     } catch (e) {
@@ -86,9 +90,22 @@ class PredicasProvider extends ChangeNotifier {
     try {
       final List<dynamic> datosList = json.decode(jsonString);
       _predicasOriginales = datosList.map((item) => Predica.fromJson(item)).toList();
-      
-      // Filtrado inicial (mostrar todas o solo favoritas)
-      alternarVistaFavoritos(_mostrarSoloFavoritos);
+
+      // Recalculamos las categorías disponibles a partir de la data nueva
+      _categoriasDisponibles = _predicasOriginales
+          .map((p) => p.categoria)
+          .where((c) => c.trim().isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort();
+
+      // Si la categoría seleccionada ya no existe en la nueva data, la reseteamos
+      if (_categoriaSeleccionada != null &&
+          !_categoriasDisponibles.contains(_categoriaSeleccionada)) {
+        _categoriaSeleccionada = null;
+      }
+
+      _aplicarFiltros();
 
       _cargando = false;
       notifyListeners();
@@ -108,11 +125,8 @@ class PredicasProvider extends ChangeNotifier {
 
       if (respuesta.statusCode == 200) {
         final contenidoNube = respuesta.body;
-
-        // VERIFICACIÓN DE SEGURIDAD
         json.decode(contenidoNube); 
 
-        // Guardar en disco
         final directorio = await getApplicationDocumentsDirectory();
         final archivoLocal = File('${directorio.path}/$_nombreArchivoLocal');
         await archivoLocal.writeAsString(contenidoNube);
@@ -139,44 +153,50 @@ class PredicasProvider extends ChangeNotifier {
     _procesarJson(jsonString);
   }
 
+  // ==========================================================
+  //  MOTOR ÚNICO DE FILTRADO
+  //  Combina: categoría + favoritos + búsqueda, siempre juntos.
+  // ==========================================================
+  void _aplicarFiltros() {
+    Iterable<Predica> resultado = _predicasOriginales;
+
+    if (_mostrarSoloFavoritos) {
+      resultado = resultado.where((p) => _idsFavoritos.contains(p.id.toString()));
+    }
+
+    if (_categoriaSeleccionada != null) {
+      resultado = resultado.where((p) => p.categoria == _categoriaSeleccionada);
+    }
+
+    if (_queryBusqueda.isNotEmpty) {
+      final consulta = _queryBusqueda.toLowerCase();
+      resultado = resultado.where((p) => p.titulo.toLowerCase().contains(consulta));
+    }
+
+    _predicasFiltradas = resultado.toList();
+    notifyListeners();
+  }
+
   // --- LÓGICA DE FILTRADO (TODAS / FAVORITAS) ---
   void alternarVistaFavoritos(bool verFavoritos) {
     _mostrarSoloFavoritos = verFavoritos;
-    if (_mostrarSoloFavoritos) {
-      _predicasFiltradas = _predicasOriginales
-          .where((p) => _idsFavoritos.contains(p.id.toString()))
-          .toList();
-    } else {
-      _predicasFiltradas = List.from(_predicasOriginales);
-    }
-    notifyListeners();
+    _aplicarFiltros();
+  }
+
+  // --- CATEGORÍAS ---
+  void seleccionarCategoria(String? categoria) {
+    // Pasar null selecciona "Todas"
+    _categoriaSeleccionada = categoria;
+    _aplicarFiltros();
   }
 
   // --- BUSCADOR ---
   void buscar(String query) {
-    List<Predica> baseDeBusqueda = _mostrarSoloFavoritos 
-        ? _predicasOriginales.where((p) => _idsFavoritos.contains(p.id.toString())).toList()
-        : _predicasOriginales;
-
-    if (query.isEmpty) {
-      _predicasFiltradas = baseDeBusqueda;
-      notifyListeners();
-      return;
-    }
-
-    final consulta = query.toLowerCase();
-    
-    // Ahora el buscador filtra por el título de la prédica y por el predicador
-    _predicasFiltradas = baseDeBusqueda.where((predica) {
-      final coincideTitulo = predica.titulo.toLowerCase().contains(consulta);
-      return coincideTitulo;
-    }).toList();
-
-    notifyListeners();
+    _queryBusqueda = query;
+    _aplicarFiltros();
   }
 
   // --- LÓGICA DE FAVORITOS ---
-  // Nota: El ID llega como entero, lo convertimos a String para compararlo
   bool esFavorito(int id) {
     return _idsFavoritos.contains(id.toString());
   }
@@ -192,12 +212,7 @@ class PredicasProvider extends ChangeNotifier {
     }
     
     await prefs.setStringList('predicas_favoritas', _idsFavoritos);
-    
-    // Si estamos viendo solo favoritos y quitamos uno, lo removemos visualmente
-    if (_mostrarSoloFavoritos) {
-      alternarVistaFavoritos(true);
-    }
-    notifyListeners();
+    _aplicarFiltros();
   }
 
   Future<void> _cargarFavoritosGuardados() async {
