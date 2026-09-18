@@ -106,19 +106,21 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
               ),
             ],
           ),
-          body: Column(
-            children: [
-              player,
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  widget.titulo,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+          body: SingleChildScrollView(
+            child: Column(
+              children: [
+                player,
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Text(
+                    widget.titulo,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
