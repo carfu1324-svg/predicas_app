@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 // Asegúrate de importar tus archivos correctamente
@@ -10,124 +11,195 @@ import 'video_player_screen.dart';
 class PantallaPrincipal extends StatelessWidget {
   const PantallaPrincipal({Key? key}) : super(key: key);
 
+  // ==========================================================
+  //  VERSÍCULO DEL ENCABEZADO — cámbialo aquí cuando quieras
+  // ==========================================================
+  static const String _versiculo =
+      '"Porque yo sé los pensamientos que tengo acerca de vosotros, dice '
+      'Jehová, pensamientos de paz, y no de mal, para daros el fin que '
+      'esperáis."';
+  static const String _referenciaVersiculo = 'Jeremías 29:11';
+
   @override
   Widget build(BuildContext context) {
     // Obtenemos el provider para leer los datos
     final provider = Provider.of<PredicasProvider>(context);
     final colorPrimario = Theme.of(context).colorScheme.primary;
+    final alturaPantalla = MediaQuery.of(context).size.height;
+    final colorTexto = Theme.of(context).colorScheme.onSurface;
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text('Prédicas'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         actions: [
           IconButton(
             icon: Icon(
               context.watch<ThemeProvider>().modoOscuro
                   ? Icons.light_mode
                   : Icons.dark_mode,
+              color: colorTexto,
             ),
             tooltip: 'Cambiar tema',
             onPressed: () => context.read<ThemeProvider>().alternarTema(),
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // BUSCADOR BÁSICO
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
-            child: TextField(
-              onChanged: (value) => provider.buscar(value),
-              decoration: InputDecoration(
-                labelText: 'Buscar por título...',
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
+      body: CustomScrollView(
+        slivers: [
+          // ================= ENCABEZADO =================
+          // Título + versículo + buscador. Empieza a ~10% de la altura
+          // de pantalla para que el buscador caiga cerca del centro.
+          SliverToBoxAdapter(
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(24, alturaPantalla * 0.08, 24, 24),
+                child: Column(
+                  children: [
+                    Text(
+                      'Prédicas',
+                      style: GoogleFonts.nunito(
+                        fontSize: 32,
+                        fontWeight: FontWeight.w800,
+                        color: colorPrimario,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      _versiculo,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.lora(
+                        fontStyle: FontStyle.italic,
+                        fontSize: 15,
+                        height: 1.5,
+                        color: colorTexto.withOpacity(0.85),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '— $_referenciaVersiculo',
+                      style: GoogleFonts.lora(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: colorPrimario,
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+
+                    // BUSCADOR
+                    TextField(
+                      onChanged: (value) => provider.buscar(value),
+                      style: GoogleFonts.nunito(),
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.4),
+                        labelText: 'Buscar por título...',
+                        labelStyle: GoogleFonts.nunito(),
+                        prefixIcon: const Icon(Icons.search),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+
+                    // Chip indicando el filtro activo (si no es "Todas")
+                    if (provider.filtroActivo != PredicasProvider.filtroTodas) ...[
+                      const SizedBox(height: 14),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Chip(
+                          avatar: Icon(
+                            provider.mostrarSoloFavoritos ? Icons.favorite : Icons.label,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                          label: Text(
+                            provider.mostrarSoloFavoritos
+                                ? 'Favoritos'
+                                : provider.categoriaSeleccionada ?? '',
+                            style: GoogleFonts.nunito(color: Colors.white, fontWeight: FontWeight.w600),
+                          ),
+                          backgroundColor: colorPrimario,
+                          deleteIcon: const Icon(Icons.close, color: Colors.white, size: 18),
+                          onDeleted: () => provider.seleccionarFiltro(PredicasProvider.filtroTodas),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ),
           ),
 
-          // Chip indicando el filtro activo (si no es "Todas")
-          if (provider.filtroActivo != PredicasProvider.filtroTodas)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Chip(
-                  avatar: Icon(
-                    provider.mostrarSoloFavoritos ? Icons.favorite : Icons.label,
-                    color: Colors.white,
-                    size: 18,
+          // ================= LISTA DE PRÉDICAS =================
+          if (provider.cargando)
+            const SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (provider.predicas.isEmpty)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Text(
+                    'No hay prédicas para este filtro.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.nunito(color: Colors.grey),
                   ),
-                  label: Text(
-                    provider.mostrarSoloFavoritos
-                        ? 'Favoritos'
-                        : provider.categoriaSeleccionada ?? '',
-                  ),
-                  backgroundColor: colorPrimario,
-                  labelStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-                  deleteIcon: const Icon(Icons.close, color: Colors.white, size: 18),
-                  onDeleted: () => provider.seleccionarFiltro(PredicasProvider.filtroTodas),
                 ),
               ),
-            ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.only(bottom: 100, top: 8),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final predica = provider.predicas[index];
 
-          const SizedBox(height: 6),
-
-          // LISTA DE PRÉDICAS
-          Expanded(
-            child: provider.cargando
-                ? const Center(child: CircularProgressIndicator())
-                : provider.predicas.isEmpty
-                    ? const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(24.0),
-                          child: Text(
-                            'No hay prédicas para este filtro.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.grey),
+                    return Card(
+                      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      child: ListTile(
+                        leading: Icon(Icons.play_circle_fill, color: colorPrimario, size: 40),
+                        title: Text(
+                          predica.titulo,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.nunito(fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Text(
+                          '${predica.fecha} · ${predica.categoria}',
+                          style: GoogleFonts.nunito(fontSize: 12),
+                        ),
+                        trailing: IconButton(
+                          icon: Icon(
+                            provider.esFavorito(predica.id) ? Icons.favorite : Icons.favorite_border,
+                            color: provider.esFavorito(predica.id) ? Colors.red : Colors.grey,
+                          ),
+                          onPressed: () => provider.toggleFavorito(predica.id),
+                        ),
+                        // ACCIÓN: Abrir el reproductor in-app
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => VideoPlayerScreen(
+                              titulo: predica.titulo,
+                              url: predica.url,
+                            ),
                           ),
                         ),
-                      )
-                    : ListView.builder(
-                        itemCount: provider.predicas.length,
-                        itemBuilder: (context, index) {
-                          final predica = provider.predicas[index];
-
-                          return Card(
-                            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            child: ListTile(
-                              leading: Icon(Icons.play_circle_fill, color: colorPrimario, size: 40),
-                              title: Text(
-                                predica.titulo,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                              subtitle: Text('${predica.fecha} · ${predica.categoria}'),
-                              trailing: IconButton(
-                                icon: Icon(
-                                  provider.esFavorito(predica.id) ? Icons.favorite : Icons.favorite_border,
-                                  color: provider.esFavorito(predica.id) ? Colors.red : Colors.grey,
-                                ),
-                                onPressed: () => provider.toggleFavorito(predica.id),
-                              ),
-                              // ACCIÓN: Abrir el reproductor in-app
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => VideoPlayerScreen(
-                                    titulo: predica.titulo,
-                                    url: predica.url,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        },
                       ),
-          ),
+                    );
+                  },
+                  childCount: provider.predicas.length,
+                ),
+              ),
+            ),
         ],
       ),
       // Dos botones flotantes: filtrar por categoría y actualizar lista

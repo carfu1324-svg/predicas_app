@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 // Asegúrate de que las rutas coincidan con los nombres de tus carpetas y archivos
 import 'providers/predicas_provider.dart'; 
@@ -42,10 +43,17 @@ class MiAppDePredicas extends StatelessWidget {
           seedColor: _colorMarca,
           brightness: Brightness.light,
         ),
-        appBarTheme: const AppBarTheme(
+        // Nunito como fuente base para toda la app (listas, botones, menús)
+        textTheme: GoogleFonts.nunitoTextTheme(),
+        appBarTheme: AppBarTheme(
           backgroundColor: _colorMarca,
           foregroundColor: Colors.white,
           centerTitle: true,
+          titleTextStyle: GoogleFonts.nunito(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
         ),
       ),
 
@@ -56,10 +64,16 @@ class MiAppDePredicas extends StatelessWidget {
           seedColor: _colorMarca,
           brightness: Brightness.dark,
         ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF102A43), // azul muy oscuro, coherente con la marca
+        textTheme: GoogleFonts.nunitoTextTheme(ThemeData(brightness: Brightness.dark).textTheme),
+        appBarTheme: AppBarTheme(
+          backgroundColor: const Color(0xFF102A43), // azul muy oscuro, coherente con la marca
           foregroundColor: Colors.white,
           centerTitle: true,
+          titleTextStyle: GoogleFonts.nunito(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
         ),
         scaffoldBackgroundColor: const Color(0xFF121212),
       ),

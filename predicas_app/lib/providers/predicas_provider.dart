@@ -91,6 +91,10 @@ class PredicasProvider extends ChangeNotifier {
       final List<dynamic> datosList = json.decode(jsonString);
       _predicasOriginales = datosList.map((item) => Predica.fromJson(item)).toList();
 
+      // Orden por defecto: de más reciente a más antigua.
+      // El formato "YYYY-MM-DD" permite ordenar como texto sin convertir a DateTime.
+      _predicasOriginales.sort((a, b) => b.fecha.compareTo(a.fecha));
+
       // Recalculamos las categorías disponibles a partir de la data nueva
       _categoriasDisponibles = _predicasOriginales
           .map((p) => p.categoria)
