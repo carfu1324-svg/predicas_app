@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -21,8 +22,21 @@ class PredicasProvider extends ChangeNotifier {
   List<String> _categoriasDisponibles = [];
   String? _categoriaSeleccionada; // null = "Todas"
 
+  // --- FILTRO POR FECHA (año/mes) ---
+  List<int> _aniosDisponibles = [];
+  int? _anioSeleccionado;
+  int? _mesSeleccionado;
+
+  static const List<String> nombresMeses = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+  ];
+
   // --- BÚSQUEDA ---
   String _queryBusqueda = '';
+
+  // --- ORDEN (independiente del filtro: aplica sobre lo que esté visible) ---
+  bool _ordenAlfabetico = false;
 
   // --- CONFIGURACIÓN DE ACTUALIZACIÓN ---
   static const String _urlGitHub = "https://gist.githubusercontent.com/carfu1324-svg/5a9ff6c40fec0c78ef673714152f4abf/raw/predicas.json";
@@ -34,6 +48,29 @@ class PredicasProvider extends ChangeNotifier {
   bool get mostrarSoloFavoritos => _mostrarSoloFavoritos;
   List<String> get categorias => _categoriasDisponibles;
   String? get categoriaSeleccionada => _categoriaSeleccionada;
+  List<int> get aniosDisponibles => _aniosDisponibles;
+  int? get anioSeleccionado => _anioSeleccionado;
+  int? get mesSeleccionado => _mesSeleccionado;
+  bool get tieneFiltroFecha => _anioSeleccionado != null;
+  bool get ordenAlfabetico => _ordenAlfabetico;
+
+  /// Etiqueta legible del filtro de fecha activo, o null si no hay ninguno.
+  String? get etiquetaFecha {
+    if (_anioSeleccionado == null) return null;
+    if (_mesSeleccionado == null) return '$_anioSeleccionado';
+    return '${nombresMeses[_mesSeleccionado! - 1]} $_anioSeleccionado';
+  }
+
+  /// Devuelve los meses (1-12) que sí tienen prédicas para el año dado.
+  List<int> mesesConContenido(int anio) {
+    final anioStr = anio.toString();
+    return _predicasOriginales
+        .where((p) => p.fecha.startsWith(anioStr))
+        .map((p) => int.parse(p.fecha.substring(5, 7)))
+        .toSet()
+        .toList()
+      ..sort();
+  }
 
   PredicasProvider() {
     log("Inicializando Provider de Prédicas...", name: 'PredicasProvider');
@@ -62,17 +99,24 @@ class PredicasProvider extends ChangeNotifier {
   Future<void> cargarDatosHibridos() async {
     await _cargarFavoritosGuardados();
     try {
-      final directorio = await getApplicationDocumentsDirectory();
-      final archivoLocal = File('${directorio.path}/$_nombreArchivoLocal');
-
       String jsonString;
 
-      if (await archivoLocal.exists()) {
-        log("Cargando prédicas desde almacenamiento local", name: 'PredicasProvider');
-        jsonString = await archivoLocal.readAsString();
+      if (kIsWeb) {
+        // En la web no existe "almacenamiento local de archivos" (path_provider
+        // no aplica ahí), así que vamos directo a los assets empaquetados.
+        log("Web: cargando prédicas desde Assets", name: 'PredicasProvider');
+        jsonString = await rootBundle.loadString('assets/fonts/predicas.json');
       } else {
-        log("Cargando prédicas desde Assets", name: 'PredicasProvider');
-        jsonString = await rootBundle.loadString('assets/predicas_final.json');
+        final directorio = await getApplicationDocumentsDirectory();
+        final archivoLocal = File('${directorio.path}/$_nombreArchivoLocal');
+
+        if (await archivoLocal.exists()) {
+          log("Cargando prédicas desde almacenamiento local", name: 'PredicasProvider');
+          jsonString = await archivoLocal.readAsString();
+        } else {
+          log("Cargando prédicas desde Assets", name: 'PredicasProvider');
+          jsonString = await rootBundle.loadString('assets/fonts/predicas.json');
+        }
       }
 
       _procesarJson(jsonString);
@@ -109,6 +153,19 @@ class PredicasProvider extends ChangeNotifier {
         _categoriaSeleccionada = null;
       }
 
+      // Recalculamos los años disponibles (para el filtro de fecha)
+      _aniosDisponibles = _predicasOriginales
+          .map((p) => int.tryParse(p.fecha.substring(0, 4)) ?? 0)
+          .where((a) => a != 0)
+          .toSet()
+          .toList()
+        ..sort((a, b) => b.compareTo(a)); // más reciente primero
+
+      if (_anioSeleccionado != null && !_aniosDisponibles.contains(_anioSeleccionado)) {
+        _anioSeleccionado = null;
+        _mesSeleccionado = null;
+      }
+
       _aplicarFiltros();
 
       _cargando = false;
@@ -131,9 +188,12 @@ class PredicasProvider extends ChangeNotifier {
         final contenidoNube = respuesta.body;
         json.decode(contenidoNube); 
 
-        final directorio = await getApplicationDocumentsDirectory();
-        final archivoLocal = File('${directorio.path}/$_nombreArchivoLocal');
-        await archivoLocal.writeAsString(contenidoNube);
+        if (!kIsWeb) {
+          // Guardar en disco solo tiene sentido fuera de la web
+          final directorio = await getApplicationDocumentsDirectory();
+          final archivoLocal = File('${directorio.path}/$_nombreArchivoLocal');
+          await archivoLocal.writeAsString(contenidoNube);
+        }
         log("¡Prédicas actualizadas y guardadas!", name: 'PredicasProvider');
         
         if (aplicarCambiosVisuales) {
@@ -172,13 +232,50 @@ class PredicasProvider extends ChangeNotifier {
       resultado = resultado.where((p) => p.categoria == _categoriaSeleccionada);
     }
 
+    if (_anioSeleccionado != null) {
+      final anioStr = _anioSeleccionado.toString();
+      resultado = resultado.where((p) => p.fecha.startsWith(anioStr));
+
+      if (_mesSeleccionado != null) {
+        final mesStr = _mesSeleccionado.toString().padLeft(2, '0');
+        resultado = resultado.where((p) => p.fecha.substring(5, 7) == mesStr);
+      }
+    }
+
     if (_queryBusqueda.isNotEmpty) {
       final consulta = _queryBusqueda.toLowerCase();
       resultado = resultado.where((p) => p.titulo.toLowerCase().contains(consulta));
     }
 
-    _predicasFiltradas = resultado.toList();
+    final lista = resultado.toList();
+
+    // El orden alfabético se aplica encima de cualquier filtro/búsqueda activa.
+    // Si está apagado, respetamos el orden base (por fecha, más reciente primero).
+    if (_ordenAlfabetico) {
+      lista.sort((a, b) => a.titulo.toLowerCase().compareTo(b.titulo.toLowerCase()));
+    }
+
+    _predicasFiltradas = lista;
     notifyListeners();
+  }
+
+  // --- ORDEN ---
+  void alternarOrdenAlfabetico(bool alfabetico) {
+    _ordenAlfabetico = alfabetico;
+    _aplicarFiltros();
+  }
+
+  // --- FILTRO DE FECHA ---
+  void seleccionarFecha(int anio, {int? mes}) {
+    _anioSeleccionado = anio;
+    _mesSeleccionado = mes;
+    _aplicarFiltros();
+  }
+
+  void limpiarFiltroFecha() {
+    _anioSeleccionado = null;
+    _mesSeleccionado = null;
+    _aplicarFiltros();
   }
 
   // --- LÓGICA DE FILTRADO (TODAS / FAVORITAS) ---
