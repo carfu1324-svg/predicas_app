@@ -6,6 +6,7 @@ class Predica {
   final String url;
   final bool oculto; // true => la prédica no se muestra en la app
   final List<String> versiculos; // referencias citadas en la prédica (ej. "Juan 3:16")
+  final String? colorCategoria; // opcional: color hex de su categoría (ej. "#1775CE")
   bool isFavorito;
 
   Predica({
@@ -16,6 +17,7 @@ class Predica {
     required this.url,
     this.oculto = false,
     this.versiculos = const [],
+    this.colorCategoria,
     this.isFavorito = false,
   });
 
@@ -30,6 +32,7 @@ class Predica {
       // cómo lo escriba el editor del JSON. Si no viene, la prédica se muestra.
       oculto: _leerBool(json['oculto'] ?? json['oculta']),
       versiculos: _leerLista(json['versiculos']),
+      colorCategoria: json['colorCategoria']?.toString(),
       isFavorito: json['isFavorito'] ?? false,
     );
   }

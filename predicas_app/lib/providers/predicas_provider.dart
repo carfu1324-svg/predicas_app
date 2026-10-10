@@ -20,6 +20,8 @@ class PredicasProvider extends ChangeNotifier {
 
   // --- CATEGORÍAS ---
   List<String> _categoriasDisponibles = [];
+  // Colores definidos en el JSON (campo opcional "colorCategoria"), por categoría.
+  Map<String, String> _coloresCategoriaJson = {};
   String? _categoriaSeleccionada; // null = "Todas"
 
   // --- FILTRO POR FECHA (año/mes) ---
@@ -47,6 +49,10 @@ class PredicasProvider extends ChangeNotifier {
   bool get cargando => _cargando;
   bool get mostrarSoloFavoritos => _mostrarSoloFavoritos;
   List<String> get categorias => _categoriasDisponibles;
+
+  /// Color hex que el JSON define para una categoría, o null si no define ninguno.
+  String? colorHexDeCategoria(String categoria) =>
+      _coloresCategoriaJson[categoria.trim().toLowerCase()];
   String? get categoriaSeleccionada => _categoriaSeleccionada;
   List<int> get aniosDisponibles => _aniosDisponibles;
   int? get anioSeleccionado => _anioSeleccionado;
@@ -152,6 +158,15 @@ class PredicasProvider extends ChangeNotifier {
           .toSet()
           .toList()
         ..sort();
+
+      // Colores de categoría escritos en el JSON: el primero que aparezca gana.
+      _coloresCategoriaJson = {};
+      for (final p in _predicasOriginales) {
+        final hex = p.colorCategoria;
+        if (hex != null && hex.trim().isNotEmpty) {
+          _coloresCategoriaJson.putIfAbsent(p.categoria.trim().toLowerCase(), () => hex.trim());
+        }
+      }
 
       // Si la categoría seleccionada ya no existe en la nueva data, la reseteamos
       if (_categoriaSeleccionada != null &&

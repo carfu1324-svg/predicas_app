@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 
 // Asegúrate de importar tus archivos correctamente
 import '../providers/predicas_provider.dart'; 
@@ -8,8 +10,171 @@ import '../providers/theme_provider.dart';
 import 'video_player_screen.dart';
 //import '../models/predica.dart';
 
-class PantallaPrincipal extends StatelessWidget {
+class PantallaPrincipal extends StatefulWidget {
   const PantallaPrincipal({Key? key}) : super(key: key);
+
+  @override
+  State<PantallaPrincipal> createState() => _PantallaPrincipalState();
+}
+
+class _PantallaPrincipalState extends State<PantallaPrincipal> {
+  // --- Llaves para señalar cada elemento en el tutorial ---
+  final GlobalKey _keyTema = GlobalKey();
+  final GlobalKey _keyBuscador = GlobalKey();
+  final GlobalKey _keyPrimeraTarjeta = GlobalKey();
+  final GlobalKey _keyFavorito = GlobalKey();
+  final GlobalKey _keyFabCategorias = GlobalKey();
+  final GlobalKey _keyFabActualizar = GlobalKey();
+
+  static const String _prefTutorialVisto = 'tutorial_visto';
+  bool _tutorialPendiente = false; // true solo la primera vez que se abre la app
+  bool _tutorialProgramado = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _revisarTutorial();
+  }
+
+  Future<void> _revisarTutorial() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final visto = prefs.getBool(_prefTutorialVisto) ?? false;
+      if (mounted && !visto) setState(() => _tutorialPendiente = true);
+    } catch (_) {
+      // Si falla la lectura, simplemente no mostramos el tutorial.
+    }
+  }
+
+  Future<void> _marcarTutorialVisto() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_prefTutorialVisto, true);
+    } catch (_) {}
+  }
+
+  // Texto que se muestra sobre la pantalla oscurecida.
+  Widget _textoTutorial(String titulo, String detalle) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          titulo,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          detalle,
+          style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.3),
+        ),
+      ],
+    );
+  }
+
+  TargetFocus _paso({
+    required String id,
+    required GlobalKey llave,
+    required ContentAlign alineacion,
+    required String titulo,
+    required String detalle,
+    ShapeLightFocus forma = ShapeLightFocus.Circle,
+    double radio = 12,
+  }) {
+    return TargetFocus(
+      identify: id,
+      keyTarget: llave,
+      shape: forma,
+      radius: radio,
+      contents: [
+        TargetContent(
+          align: alineacion,
+          child: _textoTutorial(titulo, detalle),
+        ),
+      ],
+    );
+  }
+
+  void _mostrarTutorial() {
+    final pasos = <TargetFocus>[
+      _paso(
+        id: 'tema',
+        llave: _keyTema,
+        alineacion: ContentAlign.bottom,
+        titulo: 'Modo claro u oscuro',
+        detalle: 'Cambia el aspecto de la app. Se recuerda tu elección.',
+      ),
+      _paso(
+        id: 'buscador',
+        llave: _keyBuscador,
+        alineacion: ContentAlign.bottom,
+        forma: ShapeLightFocus.RRect,
+        radio: 14,
+        titulo: 'Buscador',
+        detalle: 'Escribe parte del título para encontrar una prédica.',
+      ),
+      // Estos dos solo se incluyen si ya hay una prédica en pantalla.
+      if (_keyPrimeraTarjeta.currentContext != null)
+        _paso(
+          id: 'tarjeta',
+          llave: _keyPrimeraTarjeta,
+          alineacion: ContentAlign.bottom,
+          forma: ShapeLightFocus.RRect,
+          radio: 12,
+          titulo: 'Reproducir',
+          detalle: 'Toca una prédica para verla aquí mismo. La app recuerda '
+              'en qué minuto te quedaste.',
+        ),
+      if (_keyFavorito.currentContext != null)
+        _paso(
+          id: 'favorito',
+          llave: _keyFavorito,
+          alineacion: ContentAlign.bottom,
+          titulo: 'Favoritas',
+          detalle: 'Toca el corazón para guardar una prédica y verla luego '
+              'en tu lista de favoritas.',
+        ),
+      _paso(
+        id: 'categorias',
+        llave: _keyFabCategorias,
+        alineacion: ContentAlign.top,
+        titulo: 'Filtros',
+        detalle: 'Filtra por categoría, favoritas o fecha, y ordena de la A '
+            'a la Z.',
+      ),
+      _paso(
+        id: 'actualizar',
+        llave: _keyFabActualizar,
+        alineacion: ContentAlign.top,
+        titulo: 'Actualizar',
+        detalle: 'Descarga las prédicas nuevas desde internet.',
+      ),
+    ];
+
+    TutorialCoachMark(
+      targets: pasos,
+      colorShadow: Colors.black,
+      opacityShadow: 0.85,
+      paddingFocus: 6,
+      textSkip: 'SALTAR',
+      textStyleSkip: const TextStyle(
+        color: Colors.white,
+        fontSize: 16,
+        fontWeight: FontWeight.bold,
+      ),
+      onFinish: () {
+        _marcarTutorialVisto();
+      },
+      onSkip: () {
+        _marcarTutorialVisto();
+        return true;
+      },
+    ).show(context: context);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,15 +187,36 @@ class PantallaPrincipal extends StatelessWidget {
     final bool filtroEsCategoria =
         !provider.mostrarSoloFavoritos && provider.categoriaSeleccionada != null;
     final Color colorChipFiltro = filtroEsCategoria
-        ? colorDeCategoria(provider.categoriaSeleccionada!, brillo)
+        ? colorDeCategoria(
+            provider.categoriaSeleccionada!,
+            brillo,
+            hex: provider.colorHexDeCategoria(provider.categoriaSeleccionada!),
+          )
         : colorPrimario;
     final Color textoChipFiltro = textoSobre(colorChipFiltro);
 
+    // Primera vez: cuando ya cargó la lista, mostramos el tutorial una sola vez.
+    if (_tutorialPendiente &&
+        !_tutorialProgramado &&
+        !provider.cargando &&
+        provider.predicas.isNotEmpty) {
+      _tutorialProgramado = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _mostrarTutorial();
+      });
+    }
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Mensajes de Verdad'),
+        title: const Text('Prédicas'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.help_outline),
+            tooltip: 'Ver tutorial',
+            onPressed: _mostrarTutorial,
+          ),
+          IconButton(
+            key: _keyTema,
             icon: Icon(
               context.watch<ThemeProvider>().modoOscuro
                   ? Icons.light_mode
@@ -52,6 +238,7 @@ class PantallaPrincipal extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 TextField(
+                  key: _keyBuscador,
                   onChanged: (value) => provider.buscar(value),
                   style: GoogleFonts.nunito(),
                   decoration: InputDecoration(
@@ -136,9 +323,14 @@ class PantallaPrincipal extends StatelessWidget {
                         itemCount: provider.predicas.length,
                         itemBuilder: (context, index) {
                           final predica = provider.predicas[index];
-                          final colorCategoria = colorDeCategoria(predica.categoria, brillo);
+                          final colorCategoria = colorDeCategoria(
+                            predica.categoria,
+                            brillo,
+                            hex: provider.colorHexDeCategoria(predica.categoria),
+                          );
 
                           return Card(
+                            key: index == 0 ? _keyPrimeraTarjeta : null,
                             margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             child: ListTile(
                               leading: Icon(Icons.play_circle_fill, color: colorCategoria, size: 40),
@@ -164,6 +356,7 @@ class PantallaPrincipal extends StatelessWidget {
                                 ),
                               ),
                               trailing: IconButton(
+                                key: index == 0 ? _keyFavorito : null,
                                 icon: Icon(
                                   provider.esFavorito(predica.id) ? Icons.favorite : Icons.favorite_border,
                                   color: provider.esFavorito(predica.id) ? Colors.red : Colors.grey,
@@ -195,6 +388,7 @@ class PantallaPrincipal extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           FloatingActionButton(
+            key: _keyFabCategorias,
             heroTag: 'fab_categorias',
             onPressed: () => _mostrarFiltros(context, provider),
             backgroundColor: Theme.of(context).colorScheme.surface,
@@ -203,6 +397,7 @@ class PantallaPrincipal extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           FloatingActionButton(
+            key: _keyFabActualizar,
             heroTag: 'fab_refresh',
             onPressed: () async {
               bool exito = await provider.recargarLista();
@@ -355,7 +550,11 @@ class PantallaPrincipal extends StatelessWidget {
     final bool esCategoria = valor != PredicasProvider.filtroTodas &&
         valor != PredicasProvider.filtroFavoritos;
     final Color colorItem = esCategoria
-        ? colorDeCategoria(valor, Theme.of(context).brightness)
+        ? colorDeCategoria(
+            valor,
+            Theme.of(context).brightness,
+            hex: provider.colorHexDeCategoria(valor),
+          )
         : colorPrimario;
 
     return ListTile(
@@ -473,9 +672,12 @@ class PantallaPrincipal extends StatelessWidget {
 
 // ==========================================================
 //  COLORES POR CATEGORÍA
+//  Prioridad para elegir el color de una categoría:
+//    1) El campo "colorCategoria" del JSON (ej. "#1775CE"), si existe.
+//    2) Esta lista (colores ya elegidos para las categorías actuales).
+//    3) Un color generado automáticamente a partir del nombre.
+//  Por eso puedes crear cualquier categoría nueva sin tocar el código.
 //  Las claves van en minúsculas (se compara sin importar mayúsculas).
-//  Si agregas una categoría nueva al JSON, se le asigna un color de
-//  respaldo automáticamente; para elegirle uno a mano, añádela aquí.
 // ==========================================================
 const Map<String, Color> _coloresCategoria = {
   'madurez cristiana': Color(0xFF1775CE), // azul de la marca
@@ -490,15 +692,6 @@ const Map<String, Color> _coloresCategoria = {
   'ojos en el matrimonio en cristo (según el sermón del monte)': Color(0xFF455A64), // gris azulado
 };
 
-const List<Color> _coloresRespaldo = [
-  Color(0xFF283593), // índigo
-  Color(0xFF827717), // lima oscuro
-  Color(0xFF4E342E), // café oscuro
-  Color(0xFF37474F), // gris azulado oscuro
-  Color(0xFF880E4F), // vino
-  Color(0xFFBF360C), // terracota
-];
-
 // Hash simple y estable (siempre da el mismo número para el mismo texto).
 int _hashEstable(String texto) {
   var h = 0;
@@ -508,11 +701,30 @@ int _hashEstable(String texto) {
   return h;
 }
 
+// Color automático a partir del nombre: mismo nombre, mismo color, siempre.
+// El matiz evita la zona roja para no confundirse con el corazón de favoritos.
+Color _colorGenerado(String clave) {
+  final double matiz = 30 + (_hashEstable(clave) % 300).toDouble();
+  return HSLColor.fromAHSL(1, matiz, 0.62, 0.38).toColor();
+}
+
+// Acepta "#RRGGBB", "RRGGBB" o "#AARRGGBB". Si no es válido, devuelve null.
+Color? _parsearHex(String? texto) {
+  if (texto == null) return null;
+  var t = texto.trim().replaceFirst('#', '');
+  if (t.length == 6) t = 'FF$t';
+  if (t.length != 8) return null;
+  final valor = int.tryParse(t, radix: 16);
+  return valor == null ? null : Color(valor);
+}
+
 /// Color de una categoría. En modo oscuro se aclara para que se lea bien.
-Color colorDeCategoria(String categoria, Brightness brillo) {
+/// [hex] es el color definido en el JSON para esa categoría (si lo hay).
+Color colorDeCategoria(String categoria, Brightness brillo, {String? hex}) {
   final clave = categoria.trim().toLowerCase();
-  final base = _coloresCategoria[clave] ??
-      _coloresRespaldo[_hashEstable(clave) % _coloresRespaldo.length];
+  final base = _parsearHex(hex) ??
+      _coloresCategoria[clave] ??
+      _colorGenerado(clave);
 
   if (brillo == Brightness.light) return base;
 
