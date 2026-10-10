@@ -11,83 +11,43 @@ import 'video_player_screen.dart';
 class PantallaPrincipal extends StatelessWidget {
   const PantallaPrincipal({Key? key}) : super(key: key);
 
-  // ==========================================================
-  //  VERSÍCULO DEL ENCABEZADO — cámbialo aquí cuando quieras
-  // ==========================================================
-  static const String _versiculo =
-      '"Porque yo sé los pensamientos que tengo acerca de vosotros, dice '
-      'Jehová, pensamientos de paz, y no de mal, para daros el fin que '
-      'esperáis."';
-  static const String _referenciaVersiculo = 'Jeremías 29:11';
-
   @override
   Widget build(BuildContext context) {
     // Obtenemos el provider para leer los datos
     final provider = Provider.of<PredicasProvider>(context);
     final colorPrimario = Theme.of(context).colorScheme.primary;
-    final colorTexto = Theme.of(context).colorScheme.onSurface;
+    final brillo = Theme.of(context).brightness;
+
+    // Si el filtro activo es una categoría, el chip toma el color de esa categoría.
+    final bool filtroEsCategoria =
+        !provider.mostrarSoloFavoritos && provider.categoriaSeleccionada != null;
+    final Color colorChipFiltro = filtroEsCategoria
+        ? colorDeCategoria(provider.categoriaSeleccionada!, brillo)
+        : colorPrimario;
+    final Color textoChipFiltro = textoSobre(colorChipFiltro);
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
+        title: const Text('Mensajes de Verdad'),
         actions: [
           IconButton(
             icon: Icon(
               context.watch<ThemeProvider>().modoOscuro
                   ? Icons.light_mode
                   : Icons.dark_mode,
-              color: colorTexto,
             ),
             tooltip: 'Cambiar tema',
             onPressed: () => context.read<ThemeProvider>().alternarTema(),
           ),
         ],
       ),
-      // Estructura simple: encabezado fijo (hero + buscador + chips)
-      // arriba, y solo la lista de abajo hace scroll. Sin slivers.
+      // Estructura simple: buscador + chips fijos arriba, y solo la lista
+      // de abajo hace scroll. Sin slivers.
       body: Column(
         children: [
-          // ================= HERO: título + versículo =================
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
-            child: Column(
-              children: [
-                Text(
-                  'Prédicas',
-                  style: GoogleFonts.nunito(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w800,
-                    color: colorPrimario,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  _versiculo,
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.lora(
-                    fontStyle: FontStyle.italic,
-                    fontSize: 14,
-                    height: 1.4,
-                    color: colorTexto.withOpacity(0.85),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '— $_referenciaVersiculo',
-                  style: GoogleFonts.lora(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: colorPrimario,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
           // ================= BUSCADOR + CHIPS (siempre visibles) =================
           Padding(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -119,19 +79,19 @@ class PantallaPrincipal extends StatelessWidget {
                             child: Chip(
                               avatar: Icon(
                                 provider.mostrarSoloFavoritos ? Icons.favorite : Icons.label,
-                                color: Colors.white,
+                                color: textoChipFiltro,
                                 size: 16,
                               ),
                               label: Text(
                                 provider.mostrarSoloFavoritos
                                     ? 'Favoritos'
                                     : provider.categoriaSeleccionada ?? '',
-                                style: GoogleFonts.nunito(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
+                                style: GoogleFonts.nunito(color: textoChipFiltro, fontWeight: FontWeight.w600, fontSize: 12),
                               ),
-                              backgroundColor: colorPrimario,
+                              backgroundColor: colorChipFiltro,
                               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               visualDensity: VisualDensity.compact,
-                              deleteIcon: const Icon(Icons.close, color: Colors.white, size: 16),
+                              deleteIcon: Icon(Icons.close, color: textoChipFiltro, size: 16),
                               onDeleted: () => provider.seleccionarFiltro(PredicasProvider.filtroTodas),
                             ),
                           ),
@@ -176,20 +136,32 @@ class PantallaPrincipal extends StatelessWidget {
                         itemCount: provider.predicas.length,
                         itemBuilder: (context, index) {
                           final predica = provider.predicas[index];
+                          final colorCategoria = colorDeCategoria(predica.categoria, brillo);
 
                           return Card(
                             margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             child: ListTile(
-                              leading: Icon(Icons.play_circle_fill, color: colorPrimario, size: 40),
+                              leading: Icon(Icons.play_circle_fill, color: colorCategoria, size: 40),
                               title: Text(
                                 predica.titulo,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: GoogleFonts.nunito(fontWeight: FontWeight.bold),
                               ),
-                              subtitle: Text(
-                                '${predica.fecha} · ${predica.categoria}',
-                                style: GoogleFonts.nunito(fontSize: 12),
+                              subtitle: Text.rich(
+                                TextSpan(
+                                  style: GoogleFonts.nunito(fontSize: 12),
+                                  children: [
+                                    TextSpan(text: '${predica.fecha} · '),
+                                    TextSpan(
+                                      text: predica.categoria,
+                                      style: TextStyle(
+                                        color: colorCategoria,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                               trailing: IconButton(
                                 icon: Icon(
@@ -205,6 +177,9 @@ class PantallaPrincipal extends StatelessWidget {
                                   builder: (_) => VideoPlayerScreen(
                                     titulo: predica.titulo,
                                     url: predica.url,
+                                    fecha: predica.fecha,
+                                    categoria: predica.categoria,
+                                    versiculos: predica.versiculos,
                                   ),
                                 ),
                               ),
@@ -375,16 +350,27 @@ class PantallaPrincipal extends StatelessWidget {
     final bool seleccionado = provider.filtroActivo == valor;
     final colorPrimario = Theme.of(context).colorScheme.primary;
     final colorTexto = Theme.of(context).textTheme.bodyLarge?.color;
+
+    // "Todas" y "Favoritos" usan el color de marca; cada categoría, el suyo.
+    final bool esCategoria = valor != PredicasProvider.filtroTodas &&
+        valor != PredicasProvider.filtroFavoritos;
+    final Color colorItem = esCategoria
+        ? colorDeCategoria(valor, Theme.of(context).brightness)
+        : colorPrimario;
+
     return ListTile(
-      leading: Icon(icono, color: seleccionado ? colorPrimario : Colors.grey[500]),
+      leading: Icon(
+        icono,
+        color: (esCategoria || seleccionado) ? colorItem : Colors.grey[500],
+      ),
       title: Text(
         texto,
         style: TextStyle(
           fontWeight: seleccionado ? FontWeight.bold : FontWeight.normal,
-          color: seleccionado ? colorPrimario : colorTexto,
+          color: seleccionado ? colorItem : colorTexto,
         ),
       ),
-      trailing: seleccionado ? Icon(Icons.check, color: colorPrimario) : null,
+      trailing: seleccionado ? Icon(Icons.check, color: colorItem) : null,
       onTap: () {
         provider.seleccionarFiltro(valor);
         Navigator.pop(context);
@@ -482,4 +468,61 @@ class PantallaPrincipal extends StatelessWidget {
   bool _hayChipsActivos(PredicasProvider provider) {
     return provider.filtroActivo != PredicasProvider.filtroTodas || provider.tieneFiltroFecha;
   }
+}
+
+
+// ==========================================================
+//  COLORES POR CATEGORÍA
+//  Las claves van en minúsculas (se compara sin importar mayúsculas).
+//  Si agregas una categoría nueva al JSON, se le asigna un color de
+//  respaldo automáticamente; para elegirle uno a mano, añádela aquí.
+// ==========================================================
+const Map<String, Color> _coloresCategoria = {
+  'madurez cristiana': Color(0xFF1775CE), // azul de la marca
+  'conociendo al señor y su unidad': Color(0xFF6A1B9A), // morado
+  'el poder de dios y la fe del creyente': Color(0xFFD84315), // naranja
+  'mensajes generales': Color(0xFF00695C), // verde azulado
+  'liderazgo': Color(0xFFAD1457), // rosa fuerte
+  'iglesia, dispensaiones, transición y más': Color(0xFF6D4C41), // café
+  'matrimonio': Color(0xFF558B2F), // verde oliva
+  'crianza': Color(0xFFB26A00), // ámbar oscuro
+  'canticos y alabanza': Color(0xFF00838F), // cian
+  'ojos en el matrimonio en cristo (según el sermón del monte)': Color(0xFF455A64), // gris azulado
+};
+
+const List<Color> _coloresRespaldo = [
+  Color(0xFF283593), // índigo
+  Color(0xFF827717), // lima oscuro
+  Color(0xFF4E342E), // café oscuro
+  Color(0xFF37474F), // gris azulado oscuro
+  Color(0xFF880E4F), // vino
+  Color(0xFFBF360C), // terracota
+];
+
+// Hash simple y estable (siempre da el mismo número para el mismo texto).
+int _hashEstable(String texto) {
+  var h = 0;
+  for (final unidad in texto.codeUnits) {
+    h = (h * 31 + unidad) & 0x7fffffff;
+  }
+  return h;
+}
+
+/// Color de una categoría. En modo oscuro se aclara para que se lea bien.
+Color colorDeCategoria(String categoria, Brightness brillo) {
+  final clave = categoria.trim().toLowerCase();
+  final base = _coloresCategoria[clave] ??
+      _coloresRespaldo[_hashEstable(clave) % _coloresRespaldo.length];
+
+  if (brillo == Brightness.light) return base;
+
+  final hsl = HSLColor.fromColor(base);
+  return hsl.lightness >= 0.6 ? base : hsl.withLightness(0.68).toColor();
+}
+
+/// Blanco u oscuro, el que mejor se lea sobre el color de fondo dado.
+Color textoSobre(Color fondo) {
+  return ThemeData.estimateBrightnessForColor(fondo) == Brightness.dark
+      ? Colors.white
+      : Colors.black87;
 }

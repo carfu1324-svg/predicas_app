@@ -133,7 +133,13 @@ class PredicasProvider extends ChangeNotifier {
   void _procesarJson(String jsonString) {
     try {
       final List<dynamic> datosList = json.decode(jsonString);
-      _predicasOriginales = datosList.map((item) => Predica.fromJson(item)).toList();
+      // Las prédicas marcadas como ocultas se descartan aquí, antes de calcular
+      // categorías, años y filtros: así tampoco aparecen en esos selectores
+      // (por ejemplo, una categoría que solo tenga prédicas ocultas desaparece).
+      _predicasOriginales = datosList
+          .map((item) => Predica.fromJson(item))
+          .where((p) => !p.oculto)
+          .toList();
 
       // Orden por defecto: de más reciente a más antigua.
       // El formato "YYYY-MM-DD" permite ordenar como texto sin convertir a DateTime.

@@ -33,7 +33,7 @@ class MiAppDePredicas extends StatelessWidget {
     final themeProvider = context.watch<ThemeProvider>();
 
     return MaterialApp(
-      title: 'Prédicas App',
+      title: 'Mensajes de Verdad',
       debugShowCheckedModeBanner: false, // Quita la cinta roja de "DEBUG" en la esquina
 
       // --- TEMA CLARO ---
